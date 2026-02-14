@@ -1,0 +1,428 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id                     String              @id @default(cuid())
+  email                  String              @unique
+  passwordHash           String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  // Identity
+  currentIdentityStatement String?
+  personalityInsights     PersonalityInsight[]
+
+  // Core entities
+  values                 Value[]
+  identityArchetypes     IdentityArchetype[]
+  dailyEntries           DailyEntry[]
+  conversations          Conversation[]
+  patterns               Pattern[]
+  beliefs                Belief[]
+
+  // Auth providers
+  accounts               Account[]
+  sessions               Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// IDENTITY & VALUES
+// ============================================
+
+model PersonalityInsight {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insight     String   @db.Text
+  category    String?  // e.g., "strength", "pattern", "tendency"
+  source      String?  // where this insight came from
+  createdAt   DateTime @default(now())
+
+  @@map("personality_insights")
+}
+
+model Value {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  description         String?  @db.Text
+  priority            Int      @default(0) // 1 = highest priority
+  whyDeepDive         String?  @db.Text // "the why behind the why"
+  connectionToIdentity String? @db.Text // how this connects to their identity
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relationships
+  dailyEntries        DailyEntryValue[]
+  conversationInsights ConversationInsight[]
+
+  @@unique([userId, name])
+  @@map("values")
+}
+
+model IdentityArchetype {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                  String   // e.g., "The Creative Explorer"
+  description           String?  @db.Text
+  beliefs               String[] // array of belief statements
+  behaviors             String[] // how this identity behaves
+  traits                String[] // character traits
+  embodiedPractice      String?  @db.Text // somatic/physical description
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@map("identity_archetypes")
+}
+
+// ============================================
+// DAILY ENTRIES & TRACKING
+// ============================================
+
+model DailyEntry {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime @db.Date // Date only (no time)
+
+  // Energy & Mood (critical for depression/ADHD)
+  energyLevel     Int?     // 1-10 scale
+  moodNote        String?  @db.Text
+
+  // Values alignment
+  alignmentScore  Int?     // 1-10 scale - how aligned they felt
+
+  // Reflection
+  morningPrompt   String?  @db.Text
+  morningResponse String?  @db.Text
+  eveningPrompt   String?  @db.Text
+  eveningResponse String?  @db.Text
+
+  // AI-generated summary/reflection
+  aiReflection    String?  @db.Text
+
+  // Metadata
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relationships
+  values          DailyEntryValue[]
+  beliefEntries   DailyEntryBelief[]
+
+  @@unique([userId, date])
+  @@map("daily_entries")
+}
+
+model DailyEntryValue {
+  id          String    @id @default(cuid())
+  dailyEntryId String
+  dailyEntry  DailyEntry @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  valueId     String
+  value       Value     @relation(fields: [valueId], references: [id], onDelete: Cascade)
+
+  // How this value showed up today
+  manifestation String? @db.Text
+  actedOn       Boolean  @default(false)
+
+  @@unique([dailyEntryId, valueId])
+  @@map("daily_entry_values")
+}
+
+model DailyEntryBelief {
+  id           String     @id @default(cuid())
+  dailyEntryId String
+  dailyEntry   DailyEntry @relation(fields: [dailyEntryId], references: [id], onDelete: Cascade)
+  beliefId     String
+  belief       Belief     @relation(fields: [beliefId], references: [id], onDelete: Cascade)
+
+  // How this belief showed up today
+  manifestation String?  @db.Text
+  actedOn       Boolean  @default(false)
+
+  @@unique([dailyEntryId, beliefId])
+  @@map("daily_entry_beliefs")
+}
+
+// ============================================
+// AI CONVERSATIONS
+// ============================================
+
+model Conversation {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Conversation metadata
+  type              ConversationType
+  title             String?
+  summary           String?  @db.Text
+
+  // State
+  isActive          Boolean  @default(true)
+  startedAt         DateTime @default(now())
+  lastMessageAt     DateTime @default(now())
+  completedAt       DateTime?
+
+  // AI model used
+  model             String?  @default("claude-3-sonnet-20240229")
+
+  // Relationships
+  messages          ConversationMessage[]
+  insights          ConversationInsight[]
+
+  @@map("conversations")
+}
+
+model ConversationMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role           MessageRole
+  content        String   @db.Text
+  metadata       Json?    // for storing thinking, tool use, etc.
+
+  createdAt      DateTime @default(now())
+
+  @@map("conversation_messages")
+}
+
+model ConversationInsight {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Optional link to a value if this insight relates to one
+  valueId        String?
+  value          Value?   @relation(fields: [valueId], references: [id], onDelete: Cascade)
+
+  // Optional link to a belief if this insight relates to one
+  beliefId       String?
+  belief         Belief?  @relation(fields: [beliefId], references: [id], onDelete: Cascade)
+
+  insight        String   @db.Text
+  category       String?  // e.g., "value_discovery", "belief", "pattern", "resistance"
+
+  createdAt      DateTime @default(now())
+
+  @@map("conversation_insights")
+}
+
+enum ConversationType {
+  VALUES_DISCOVERY
+  IDENTITY_CRAFT
+  DAILY_REFLECTION
+  BELIEF_WORK
+  COACHING
+  GENERAL
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ============================================
+// PATTERN RECOGNITION
+// ============================================
+
+model Pattern {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type              PatternType
+  title             String
+  description       String   @db.Text
+  evidence          String[] @db.Text // examples from user's data
+
+  recommendedAction String?  @db.Text
+
+  // Confidence/specificity
+  confidence        Float?   @default(0.5)
+
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("patterns")
+}
+
+enum PatternType {
+  TEMPORAL   // time of day, day of week effects
+  BEHAVIORAL // what triggers misalignment
+  EMOTIONAL  // connection between energy and alignment
+  VALUES     // values patterns
+  IDENTITY   // identity-related patterns
+}
+
+// ============================================
+// LIMITING BELIEFS (Phase 4)
+// ============================================
+
+model LimitingBelief {
+  id          String   @id @default(cuid())
+  userId      String
+
+  belief      String   @db.Text // the limiting belief
+  category    String?  // e.g., "self-worth", "capability", "deserving"
+
+  // Challenge work
+  challenge   String?  @db.Text // AI-generated counter-belief
+  evidence    String?  @db.Text // evidence against the belief
+
+  // Progress
+  isActive    Boolean  @default(true)
+  shiftLevel  Int?     @default(1) // 1-5, how much they've shifted this belief
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("limiting_beliefs")
+}
+
+// ============================================
+// UNIFIED BELIEF SYSTEM
+// ============================================
+
+model Belief {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Core fields
+  type            BeliefType
+  statement       String      @db.Text
+  category        BeliefCategory?
+
+  // Depth and context
+  origin          String?     @db.Text    // why this matters, where it came from
+  evidence        String?     @db.Text    // supporting evidence
+  counterEvidence String?     @db.Text    // evidence against this belief
+
+  // Transformation fields
+  challenge       String?     @db.Text    // counter-belief for limiting beliefs
+  reframe         String?     @db.Text    // reframed version
+
+  // Metadata
+  strength        Float       @default(0.5)  // 0-1 scale, how strongly held
+  priority        Int?                       // for value-type beliefs (1=highest)
+  isEmpowering    Boolean     @default(true) // false for limiting beliefs
+  isActive        Boolean     @default(true)
+
+  // Links to legacy models (for migration period)
+  sourceType      String?     // "Value", "IdentityArchetype", "LimitingBelief", etc.
+  sourceId        String?     // ID from source table
+  parentBeliefId  String?     // for beliefs that are part of an archetype
+
+  // Timestamps
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relationships
+  dailyEntries        DailyEntryBelief[]
+  conversationInsights ConversationInsight[]
+
+  @@index([userId, type])
+  @@index([userId, isActive])
+  @@index([userId, type, isActive])
+  @@index([parentBeliefId])
+  @@index([sourceType, sourceId])
+  @@map("beliefs")
+}
+
+enum BeliefType {
+  VALUE              // what's important (e.g., "Growth is essential")
+  IDENTITY_CORE      // core identity (e.g., "I am creative")
+  IDENTITY_BEHAVIOR  // how I act (e.g., "I create daily")
+  IDENTITY_TRAIT     // character trait (e.g., "I am curious")
+  IDENTITY_EMBODIMENT // somatic (e.g., "I move through world with openness")
+  LIMITING           // constraining belief (e.g., "I'm not good enough")
+  EMPOWERING         // propelling belief (e.g., "I can learn anything")
+  PERSONALITY        // observed pattern (e.g., "I tend to overthink")
+}
+
+enum BeliefCategory {
+  // Value categories
+  ACHIEVEMENT
+  CONNECTION
+  GROWTH
+  CONTRIBUTION
+  FREEDOM
+  SECURITY
+
+  // Identity categories
+  CORE_IDENTITY
+  ASPIRATIONAL
+
+  // Limiting belief categories
+  SELF_WORTH
+  CAPABILITY
+  DESERVINGNESS
+  SAFETY
+  BELONGING
+
+  // Personality categories
+  STRENGTH
+  PATTERN
+  TENDENCY
+}

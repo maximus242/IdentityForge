@@ -1,0 +1,41 @@
+{
+  "name": "identityforge",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/mobile",
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile": "npm --workspace apps/mobile run start --",
+    "web": "npm --workspace apps/web run dev -- --hostname 127.0.0.1 --port 3001",
+    "dev": "concurrently \"npm run mobile\" \"npm run web\"",
+    "check:web": "npm run lint && npm --workspace apps/web run test -- --runInBand && npm run build:web",
+    "smoke:web-local": "bash ./scripts/smoke-local.sh",
+    "build:web": "npm --workspace apps/web run build",
+    "lint": "npm --workspace apps/web run lint",
+    "db:generate": "prisma generate --schema packages/database/prisma/schema.prisma",
+    "db:push": "prisma db push --schema packages/database/prisma/schema.prisma",
+    "migrate:beliefs": "ts-node scripts/migrate-to-beliefs.ts",
+    "verify:migration": "ts-node scripts/verify-migration.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.55.0",
+    "next": "14.0.4",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.18.0 <23"
+  },
+  "overrides": {
+    "styled-jsx": "5.0.7"
+  },
+  "dependencies": {
+    "styled-jsx": "5.0.7"
+  }
+}
