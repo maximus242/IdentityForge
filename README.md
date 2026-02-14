@@ -143,3 +143,19 @@ BASE_URL="http://127.0.0.1:4173" npm run smoke:web-local
 ## License
 
 MIT
+
+## 🚀 Recent Updates
+
+- ✅ Stripe payment integration configured
+- ✅ Deployed to Kubernetes (K3s on Oracle Cloud)
+- ✅ Autonomous agents managing deployments
+- ✅ Database: PostgreSQL 15
+- ✅ Infrastructure: 4 ARM CPUs + 24GB RAM (free tier)
+
+## 💳 Payment Integration
+
+Stripe is configured and ready to process payments. Environment variables are set up for:
+- Payment processing
+- Subscription management  
+- Webhook handling
+
