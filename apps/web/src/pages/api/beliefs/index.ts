@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     // Handle multiple types (comma-separated)
     const typeFilter = type
       ? type.includes(',')
-        ? { in: type.split(',') }
+        ? { in: type.split(',') as any }
         : type
       : undefined;
 
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       where: {
         userId: user.id,
         isActive: true,
-        ...(typeFilter && { type: typeFilter }),
+        ...(typeFilter && { type: typeFilter as any }),
         ...(category && { category }),
         ...(isEmpowering !== null && { isEmpowering: isEmpowering === 'true' }),
         ...(parentBeliefId && { parentBeliefId }),
