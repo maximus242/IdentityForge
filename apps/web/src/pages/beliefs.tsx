@@ -20,12 +20,14 @@ interface Belief {
 }
 
 type FilterType = 'all' | 'empowering' | 'limiting';
+type ExportFormat = 'json' | 'csv';
 
 const BeliefsPage: NextPage = () => {
   const router = useRouter();
   const [beliefs, setBeliefs] = useState<Belief[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     async function fetchBeliefs() {
@@ -53,6 +55,40 @@ const BeliefsPage: NextPage = () => {
 
     fetchBeliefs();
   }, [router]);
+
+  const handleExport = async (format: ExportFormat) => {
+    try {
+      setExporting(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/');
+        return;
+      }
+
+      const response = await fetch(`/api/beliefs/export?format=${format}`, {
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `beliefs-export.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error exporting beliefs:', error);
+      alert('Failed to export beliefs. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const formatBeliefType = (type: string): string => {
     return type
@@ -91,26 +127,44 @@ const BeliefsPage: NextPage = () => {
       </header>
 
       <main style={styles.main}>
-        {/* Filters */}
-        <div style={styles.filters}>
-          <button
-            onClick={() => setFilter('all')}
-            style={filter === 'all' ? styles.filterButtonActive : styles.filterButton}
-          >
-            All Beliefs ({beliefs.length})
-          </button>
-          <button
-            onClick={() => setFilter('empowering')}
-            style={filter === 'empowering' ? styles.filterButtonActive : styles.filterButton}
-          >
-            Empowering ({beliefs.filter(b => b.isEmpowering).length})
-          </button>
-          <button
-            onClick={() => setFilter('limiting')}
-            style={filter === 'limiting' ? styles.filterButtonActive : styles.filterButton}
-          >
-            Limiting ({beliefs.filter(b => !b.isEmpowering).length})
-          </button>
+        {/* Filters and Export */}
+        <div style={styles.topControls}>
+          <div style={styles.filters}>
+            <button
+              onClick={() => setFilter('all')}
+              style={filter === 'all' ? styles.filterButtonActive : styles.filterButton}
+            >
+              All Beliefs ({beliefs.length})
+            </button>
+            <button
+              onClick={() => setFilter('empowering')}
+              style={filter === 'empowering' ? styles.filterButtonActive : styles.filterButton}
+            >
+              Empowering ({beliefs.filter(b => b.isEmpowering).length})
+            </button>
+            <button
+              onClick={() => setFilter('limiting')}
+              style={filter === 'limiting' ? styles.filterButtonActive : styles.filterButton}
+            >
+              Limiting ({beliefs.filter(b => !b.isEmpowering).length})
+            </button>
+          </div>
+          <div style={styles.exportControls}>
+            <button
+              onClick={() => handleExport('json')}
+              style={styles.exportButton}
+              disabled={exporting}
+            >
+              Export JSON
+            </button>
+            <button
+              onClick={() => handleExport('csv')}
+              style={styles.exportButton}
+              disabled={exporting}
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
 
         {/* Beliefs Grouped by Type */}
@@ -249,11 +303,22 @@ const styles: { [key: string]: React.CSSProperties } = {
     margin: '0 auto',
     padding: '24px',
   },
+  topControls: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap' as const,
+    gap: '16px',
+    marginBottom: '24px',
+  },
   filters: {
     display: 'flex',
     gap: '12px',
-    marginBottom: '24px',
     flexWrap: 'wrap' as const,
+  },
+  exportControls: {
+    display: 'flex',
+    gap: '8px',
   },
   filterButton: {
     padding: '10px 20px',
@@ -275,6 +340,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '14px',
     fontWeight: '600',
     cursor: 'pointer',
+  },
+  exportButton: {
+    padding: '10px 20px',
+    borderRadius: '8px',
+    border: '1px solid #667eea',
+    background: 'white',
+    color: '#667eea',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    '&:hover': {
+      background: '#f0f4ff',
+    },
+    '&:disabled': {
+      opacity: 0.5,
+      cursor: 'not-allowed',
+    },
   },
   section: {
     marginBottom: '32px',
